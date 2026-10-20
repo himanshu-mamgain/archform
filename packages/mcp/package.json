@@ -43,7 +43,7 @@
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run",
     "test:live": "cross-env KROKI_LIVE=1 vitest run test/live.test.ts",
-    "prepublishOnly": "pnpm run build"
+    "prepublishOnly": "tsup"
   },
   "devDependencies": {
     "@modelcontextprotocol/client": "2.3.1",
