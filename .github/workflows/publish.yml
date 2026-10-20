@@ -1,0 +1,80 @@
+name: Publish
+
+# Publishes @archform/mcp to npm and the MCP Registry whenever main carries a
+# version that is not on npm yet. Bump "version" in packages/mcp/package.json
+# and packages/mcp/server.json in a PR; merging it releases.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write # npm trusted publishing, provenance and MCP Registry login
+    defaults:
+      run:
+        working-directory: packages/mcp
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+
+      # Node 24 ships npm 11, which trusted publishing requires (>= 11.5.1).
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      - name: Check whether this version is already published
+        id: version
+        run: |
+          NAME=$(node -p "require('./package.json').name")
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if npm view "$NAME@$VERSION" version >/dev/null 2>&1; then
+            echo "$NAME@$VERSION is already on npm; nothing to publish."
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Publishing $NAME@$VERSION."
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.version.outputs.publish == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - if: steps.version.outputs.publish == 'true'
+        name: Lint, typecheck, test, build
+        run: |
+          pnpm --dir ../.. lint
+          pnpm typecheck
+          pnpm test
+          pnpm build
+
+      # Trusted publishing (OIDC): no NPM_TOKEN. Configure the trusted publisher
+      # on npmjs.com for this repository and workflow file (publish.yml).
+      - if: steps.version.outputs.publish == 'true'
+        name: Publish to npm
+        run: npm publish --provenance --access public
+
+      - if: steps.version.outputs.publish == 'true'
+        name: Install mcp-publisher
+        run: |
+          curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
+
+      - if: steps.version.outputs.publish == 'true'
+        name: Publish to the MCP Registry
+        run: |
+          ./mcp-publisher login github-oidc
+          ./mcp-publisher publish

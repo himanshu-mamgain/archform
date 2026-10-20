@@ -1,0 +1,62 @@
+{
+  "name": "@archform/mcp",
+  "version": "0.1.0",
+  "description": "MCP server that renders and validates diagrams as code: Mermaid, PlantUML, C4, Graphviz, D2, Structurizr, BPMN and Excalidraw.",
+  "mcpName": "io.github.himanshu-mamgain/archform",
+  "license": "MIT",
+  "author": "Himanshu Mamgain",
+  "homepage": "https://github.com/himanshu-mamgain/archform/tree/main/packages/mcp#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/himanshu-mamgain/archform.git",
+    "directory": "packages/mcp"
+  },
+  "bugs": "https://github.com/himanshu-mamgain/archform/issues",
+  "type": "module",
+  "bin": {
+    "archform-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "diagrams-as-code",
+    "mermaid",
+    "plantuml",
+    "graphviz",
+    "d2",
+    "c4",
+    "architecture"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "start": "node dist/index.js",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "test:live": "cross-env KROKI_LIVE=1 vitest run test/live.test.ts",
+    "prepublishOnly": "tsup"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/client": "2.3.1",
+    "@types/node": "22.20.5",
+    "cross-env": "^10.1.0",
+    "tsup": "8.5.1",
+    "vitest": "4.1.12"
+  },
+  "dependencies": {
+    "@hono/node-server": "2.1.5",
+    "@modelcontextprotocol/hono": "2.0.2",
+    "@modelcontextprotocol/server": "2.3.1",
+    "hono": "4.13.13",
+    "zod": "4.6.7"
+  }
+}
