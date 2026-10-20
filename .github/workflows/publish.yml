@@ -1,8 +1,9 @@
 name: Publish
 
 # Publishes @archform/mcp to npm and the MCP Registry whenever main carries a
-# version that is not on npm yet. Bump "version" in packages/mcp/package.json
-# and packages/mcp/server.json in a PR; merging it releases.
+# version that is missing from either. Bump "version" in packages/mcp/package.json
+# and packages/mcp/server.json in a PR; merging it releases. Each target is
+# checked separately, so a re-run finishes a release that stopped halfway.
 on:
   push:
     branches: [main]
@@ -38,24 +39,39 @@ jobs:
           node-version: 24
           registry-url: https://registry.npmjs.org
 
-      - name: Check whether this version is already published
+      - name: Check what is already published
         id: version
         run: |
           NAME=$(node -p "require('./package.json').name")
+          MCP_NAME=$(node -p "require('./package.json').mcpName")
           VERSION=$(node -p "require('./package.json').version")
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
           if npm view "$NAME@$VERSION" version >/dev/null 2>&1; then
-            echo "$NAME@$VERSION is already on npm; nothing to publish."
-            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "$NAME@$VERSION is already on npm."
+            echo "npm=false" >> "$GITHUB_OUTPUT"
           else
-            echo "Publishing $NAME@$VERSION."
-            echo "publish=true" >> "$GITHUB_OUTPUT"
+            echo "npm=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - if: steps.version.outputs.publish == 'true'
+          ENCODED=$(node -p "encodeURIComponent(process.argv[1])" "$MCP_NAME")
+          STATUS=$(curl -s -o /dev/null -w '%{http_code}' \
+            "https://registry.modelcontextprotocol.io/v0/servers/$ENCODED/versions/$VERSION")
+          if [ "$STATUS" = "200" ]; then
+            echo "$MCP_NAME $VERSION is already in the MCP Registry."
+            echo "registry=false" >> "$GITHUB_OUTPUT"
+          elif [ "$STATUS" = "404" ]; then
+            echo "registry=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::MCP Registry lookup returned HTTP $STATUS; try again later."
+            exit 1
+          fi
+
+      - if: steps.version.outputs.npm == 'true'
         run: pnpm install --frozen-lockfile
 
-      - if: steps.version.outputs.publish == 'true'
+      - if: steps.version.outputs.npm == 'true'
         name: Lint, typecheck, test, build
         run: |
           pnpm --dir ../.. lint
@@ -65,16 +81,36 @@ jobs:
 
       # Trusted publishing (OIDC): no NPM_TOKEN. Configure the trusted publisher
       # on npmjs.com for this repository and workflow file (publish.yml).
-      - if: steps.version.outputs.publish == 'true'
+      - if: steps.version.outputs.npm == 'true'
         name: Publish to npm
         run: npm publish --provenance --access public
 
-      - if: steps.version.outputs.publish == 'true'
+      # The registry verifies the package on npm, and a fresh release can take a
+      # minute or two to become visible there.
+      - if: steps.version.outputs.registry == 'true'
+        name: Wait for the version to be visible on npm
+        env:
+          NAME: ${{ steps.version.outputs.name }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          URL="https://registry.npmjs.org/${NAME/\//%2f}/$VERSION"
+          for attempt in $(seq 1 30); do
+            if curl -fsS -o /dev/null -H 'Cache-Control: no-cache' "$URL"; then
+              echo "$NAME@$VERSION is visible on npm."
+              exit 0
+            fi
+            echo "Not visible yet (attempt $attempt/30); waiting 10s."
+            sleep 10
+          done
+          echo "::error::$NAME@$VERSION did not appear on npm within 5 minutes."
+          exit 1
+
+      - if: steps.version.outputs.registry == 'true'
         name: Install mcp-publisher
         run: |
           curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
 
-      - if: steps.version.outputs.publish == 'true'
+      - if: steps.version.outputs.registry == 'true'
         name: Publish to the MCP Registry
         run: |
           ./mcp-publisher login github-oidc
