@@ -1,4 +1,4 @@
-import type { Context, MiddlewareHandler } from 'hono';
+import type { Context, MiddlewareHandler, Next } from 'hono';
 
 export interface ToolCallLimitOptions {
   /** Tool calls per window across all clients: size it to what the Kroki backend can take. 0 disables. */
@@ -70,10 +70,10 @@ export function createToolCallLimiter(options: ToolCallLimitOptions): ToolCallLi
     const client = options.perClient > 0 ? clientWindow(clientIp(c, trustProxy), now) : undefined;
 
     if (client && client.count + calls > options.perClient) {
-      return tooManyRequests(c, client.resetAt - now, 'Too many tool calls from this client.');
+      return tooManyRequests(c, next, client.resetAt - now, 'Too many tool calls from this client.');
     }
     if (options.global > 0 && global.count + calls > options.global) {
-      return tooManyRequests(c, global.resetAt - now, 'The server is at capacity.');
+      return tooManyRequests(c, next, global.resetAt - now, 'The server is at capacity.');
     }
     if (client) client.count += calls;
     global.count += calls;
@@ -116,8 +116,35 @@ export function clientIp(c: Context, trustProxy: number): string {
   return incoming?.socket?.remoteAddress ?? 'unknown';
 }
 
-function tooManyRequests(c: Context, retryMs: number, message: string): Response {
+/** Context key under which the limiter leaves its message for a rate-limited single tool call. */
+export const RATE_LIMITED = 'archformRateLimited';
+
+/**
+ * A single `tools/call` is let through with a message under `RATE_LIMITED`; the
+ * route turns it into a tool result with `isError: true` (through the SDK, so it
+ * is valid on every protocol revision) and the model can tell the user to wait.
+ * An HTTP 429 would surface as an opaque transport failure. Batches and
+ * unparsed bodies still get 429.
+ */
+async function tooManyRequests(
+  c: Context,
+  next: Next,
+  retryMs: number,
+  message: string,
+): Promise<Response | undefined> {
   const seconds = Math.max(1, Math.ceil(retryMs / 1000));
+  const text = `Rate limit reached: ${message} Retry in ${seconds}s.`;
+  if (isSingleToolCall(c.get('parsedBody'))) {
+    c.set(RATE_LIMITED, text);
+    await next();
+    return;
+  }
   c.header('Retry-After', String(seconds));
-  return c.json({ error: `${message} Retry in ${seconds}s.` }, 429);
+  return c.json({ error: text }, 429);
+}
+
+function isSingleToolCall(body: unknown): boolean {
+  if (typeof body !== 'object' || body === null || Array.isArray(body)) return false;
+  const { method, id } = body as { method?: unknown; id?: unknown };
+  return method === 'tools/call' && (typeof id === 'string' || typeof id === 'number');
 }

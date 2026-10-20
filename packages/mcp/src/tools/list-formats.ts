@@ -1,7 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
 import { FORMATS } from '../formats.js';
-import { READ_ONLY_ANNOTATIONS } from './shared.js';
+import { READ_ONLY_ANNOTATIONS, toolError } from './shared.js';
 
 const formatEntry = z.object({
   id: z.string(),
@@ -12,7 +12,7 @@ const formatEntry = z.object({
   example: z.string(),
 });
 
-export function registerListFormats(server: McpServer): void {
+export function registerListFormats(server: McpServer, unavailable?: string): void {
   server.registerTool(
     'list_formats',
     {
@@ -25,6 +25,7 @@ export function registerListFormats(server: McpServer): void {
       annotations: READ_ONLY_ANNOTATIONS,
     },
     async () => {
+      if (unavailable) return toolError(unavailable);
       const formats = FORMATS.map((f) => ({ ...f, aliases: [...f.aliases], outputs: [...f.outputs] }));
       return {
         content: [{ type: 'text', text: JSON.stringify({ formats }, null, 2) }],

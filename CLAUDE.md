@@ -90,7 +90,8 @@ Tool descriptions are the API the model reads: say when to use the tool, name th
 - **Auth:** none in v0.1. The HTTP endpoint has a 512 KB body limit and an in-memory limiter in `rate-limit.ts`:
   - It counts `tools/call` messages, not HTTP requests. Limits are global (`RATE_LIMIT`, sized to Kroki) and per client (`RATE_LIMIT_PER_CLIENT`).
   - It ignores `X-Forwarded-For` unless `TRUST_PROXY=N`, and then uses the Nth entry from the end, never the first, which the client controls.
-  - ChatGPT traffic arrives from a few shared OpenAI IPs.
+  - ChatGPT traffic arrives from a few shared OpenAI IPs, so deployments that mainly serve ChatGPT should set `RATE_LIMIT_PER_CLIENT=0`.
+  - A rate-limited single `tools/call` still goes through the SDK. A stripped-then-set internal header makes the per-request server's tools return `isError` with the retry hint, so the result is valid on every protocol revision. Don't hand-build JSON-RPC results: 2026-07-28 requires `resultType`.
 
 ## Testing
 

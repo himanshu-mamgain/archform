@@ -8,6 +8,8 @@ import { VERSION } from './version.js';
 
 export interface CreateServerOptions {
   renderer?: Renderer;
+  /** When set, every tool returns this message as a tool error without doing any work (used for rate limiting). */
+  unavailable?: string;
 }
 
 export function createServer(options: CreateServerOptions = {}): McpServer {
@@ -20,8 +22,8 @@ export function createServer(options: CreateServerOptions = {}): McpServer {
         'validate_diagram to check syntax, and render_diagram to produce an image and a shareable link.',
     },
   );
-  registerListFormats(server);
-  registerRenderDiagram(server, renderer);
-  registerValidateDiagram(server, renderer);
+  registerListFormats(server, options.unavailable);
+  registerRenderDiagram(server, renderer, options.unavailable);
+  registerValidateDiagram(server, renderer, options.unavailable);
   return server;
 }
