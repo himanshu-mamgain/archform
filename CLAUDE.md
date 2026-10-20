@@ -87,7 +87,10 @@ Tool descriptions are the API the model reads: say when to use the tool, name th
   - The host comes from `--host`, then `HOST`, then defaults to `127.0.0.1`.
   - A public bind needs `ALLOWED_HOSTS`.
 - The SDK's Hono app rejects requests whose `Host` is not allowed. A test `Request` has no `Host` header unless you set one.
-- **Auth:** none in v0.1. The HTTP endpoint has an in-memory per-IP rate limit (`RATE_LIMIT`) and a 512 KB body limit.
+- **Auth:** none in v0.1. The HTTP endpoint has a 512 KB body limit and an in-memory limiter in `rate-limit.ts`:
+  - It counts `tools/call` messages, not HTTP requests. Limits are global (`RATE_LIMIT`, sized to Kroki) and per client (`RATE_LIMIT_PER_CLIENT`).
+  - It ignores `X-Forwarded-For` unless `TRUST_PROXY=N`, and then uses the Nth entry from the end, never the first, which the client controls.
+  - ChatGPT traffic arrives from a few shared OpenAI IPs.
 
 ## Testing
 

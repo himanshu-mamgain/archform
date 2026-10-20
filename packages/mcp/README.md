@@ -86,12 +86,20 @@ npx -y @archform/mcp --http --port 3000
 By default the server binds to `127.0.0.1` and rejects requests whose `Host` or `Origin` is not localhost (DNS rebinding protection). To expose it publicly, for example for ChatGPT developer mode, bind to all interfaces and name your public hostname:
 
 ```sh
-HOST=0.0.0.0 ALLOWED_HOSTS=mcp.example.com PORT=8080 npx -y @archform/mcp --http
+HOST=0.0.0.0 ALLOWED_HOSTS=mcp.example.com TRUST_PROXY=1 PORT=8080 npx -y @archform/mcp --http
 ```
 
 Then add `https://mcp.example.com/mcp` as a connector in ChatGPT (Settings → Connectors, developer mode) with no authentication. Serve it behind HTTPS.
 
-The HTTP endpoint limits request bodies to 512 KB and rate-limits each client IP (60 requests per minute by default, set by `RATE_LIMIT`). The limiter is in memory, so when you run several instances, put a shared limiter in front.
+### Limits
+
+The HTTP endpoint limits request bodies to 512 KB and counts **tool calls**, not HTTP requests. A session's `initialize` and `tools/list` requests are not counted.
+
+- **Overall:** `RATE_LIMIT` (default 120 per minute) caps tool calls from all clients combined. Size it to what your Kroki backend can handle. The default is polite to the public kroki.io; raise it for a self-hosted Kroki.
+- **Per client:** `RATE_LIMIT_PER_CLIENT` (default 60 per minute) stops one client from using the whole budget. ChatGPT calls your server from OpenAI's servers, so **all ChatGPT users share a handful of IPs**, and this limit applies to them together.
+- **Behind a proxy:** most hosts (Render, Fly.io, Railway, Cloud Run) put a proxy in front of your app, so every request seems to come from the proxy's address. Set `TRUST_PROXY=1` (the number of proxies in front of the server) so the limiter uses the address your proxy added to `X-Forwarded-For`. Leave it unset when clients connect directly. Clients can write anything into that header, so it is ignored unless `TRUST_PROXY` is set.
+
+The counters are in memory, so each instance enforces its own limits.
 
 ## Configuration
 
@@ -101,7 +109,9 @@ The HTTP endpoint limits request bodies to 512 KB and rate-limits each client IP
 | `--port`, `PORT` | `3000` | HTTP port |
 | `--host`, `HOST` | `127.0.0.1` | HTTP bind address |
 | `ALLOWED_HOSTS` | | Comma-separated `Host` values accepted on a public bind |
-| `RATE_LIMIT` | `60` | Requests per minute per IP on `/mcp`; `0` disables |
+| `RATE_LIMIT` | `120` | Tool calls per minute across all clients; `0` disables |
+| `RATE_LIMIT_PER_CLIENT` | `60` | Tool calls per minute per client IP; `0` disables |
+| `TRUST_PROXY` | `0` | Number of reverse proxies whose `X-Forwarded-For` entries are trusted (`true` = 1) |
 | `KROKI_URL` | `https://kroki.io` | Kroki server used for rendering and share links |
 
 ## Self-hosting Kroki
