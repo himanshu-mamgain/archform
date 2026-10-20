@@ -4,6 +4,33 @@ An [MCP](https://modelcontextprotocol.io) server that lets AI assistants render 
 
 It works in Claude Desktop, Claude Code, Cursor and VS Code over stdio, and in ChatGPT developer mode as a remote Streamable HTTP endpoint.
 
+## Example
+
+The assistant writes diagram source like this [D2](https://d2lang.com):
+
+```d2
+direction: right
+user: User {shape: person}
+ai: AI assistant
+mcp: Archform MCP
+kroki: Kroki {shape: cylinder}
+user -> ai: "draw our architecture"
+ai -> mcp: render_diagram
+mcp -> kroki: diagram source
+kroki -> mcp: SVG / PNG
+mcp -> ai: image + share link
+```
+
+`render_diagram` turns it into an image and a share link. The image below is that link:
+
+![Rendered example: user, AI assistant, Archform MCP and Kroki](https://kroki.io/d2/svg/eNo9jUFLA0EMRu_zKz56leJ9DkLxUESUguhVwmzcCdudWb7MIiL97zK17SmQ5L03GDU1qyWCNuYWVldGvLsSv55l0YhF6bWcgljE7gnibt6ktDCnJWLHlL8qZ7w8HsLEOlnEcx83Pv0crQzK01mO7QO6aTNQvlFXQpiyNU1tpW6CWP84q6kd-xxMRsrcc_10aVy28Loy6X_5Rr597HGPw-v-CvWizTIq7uBZqDhamf4ABl9V_w)
+
+**Try it:** once Archform is connected, ask your assistant:
+
+> Draw a C4 context diagram of a URL shortener.
+
+Or *"Turn `schema.prisma` into an ER diagram"*, or *"Draw a sequence diagram of our login flow"*.
+
 > **Privacy:** rendering is done by [Kroki](https://kroki.io). By default, **diagram source is sent to the public kroki.io service**. If your diagrams describe anything you would not paste into a public website, [self-host Kroki](#self-hosting-kroki) and set `KROKI_URL`.
 
 ## Tools

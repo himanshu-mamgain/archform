@@ -40,6 +40,8 @@ describe('KrokiRenderer', () => {
     expect(init.method).toBe('POST');
     expect(init.body).toBe('a -> b');
     expect((init.headers as Record<string, string>)['Content-Type']).toMatch(/^text\/plain/);
+    // An image Accept makes Kroki draw errors as images.
+    expect((init.headers as Record<string, string>).Accept).toBe('*/*');
     expect(init.signal).toBeInstanceOf(AbortSignal);
   });
 
@@ -51,6 +53,20 @@ describe('KrokiRenderer', () => {
     const error = await new KrokiRenderer().render('graphviz', 'digraph {', 'svg').catch((e) => e);
     expect(error).toBeInstanceOf(DiagramSyntaxError);
     expect(error.errors).toEqual([{ line: 4, message: "Error: <stdin>: syntax error in line 4 near '}'" }]);
+  });
+
+  it('does not read a PNG error image as the message', async () => {
+    vi.stubGlobal(
+      'fetch',
+      async () =>
+        new Response(new Uint8Array([0x89, 0x50, 0x4e, 0x47]), {
+          status: 400,
+          headers: { 'Content-Type': 'image/png' },
+        }),
+    );
+    const error = await new KrokiRenderer().render('graphviz', 'digraph {', 'png').catch((e) => e);
+    expect(error).toBeInstanceOf(DiagramSyntaxError);
+    expect(error.errors).toEqual([{ message: 'The diagram could not be rendered.' }]);
   });
 
   it('treats 5xx as a service error, not an invalid diagram', async () => {
@@ -102,6 +118,31 @@ describe('parseKrokiError', () => {
       line: 1,
       message: 'SyntaxError: Unable to convert the diagram: bad JSON (line 1 column 2)\nJSON.parse (<anonymous>)',
     });
+  });
+
+  it('reads the text out of an SVG error image', () => {
+    // Captured from kroki.io for an invalid D2 diagram requested with Accept: image/svg+xml.
+    const body = [
+      '<?xml version="1.0" encoding="UTF-8" standalone="no"?>',
+      '<svg xmlns="http://www.w3.org/2000/svg" width="673" height="44" viewBox="0 0 673 44" version="1.1">',
+      '<rect fill="#fff5f7" width="673" height="44"/>',
+      '<text id="text" xml:space="preserve" font-weight="bold" fill="#cd0930" font-size="16px" x="0" y="5" dy="0">',
+      '<tspan x="10" dy="16">Error 400: err: failed to compile -: -:2:4: maps must be terminated with }</tspan>',
+      '<tspan x="10" dy="16"> (exit code 1)</tspan>',
+      '</text>',
+      '<rect fill="#ff3860" width="3" height="44"/>',
+      '</svg>',
+    ].join('\n');
+    expect(parseKrokiError('d2', body)).toEqual({
+      line: 2,
+      message: 'err: failed to compile -: -:2:4: maps must be terminated with }',
+    });
+  });
+
+  it('decodes XML entities in SVG error text', () => {
+    const body =
+      '<svg><text><tspan>Error 400: Error: &lt;stdin&gt;: syntax error in line 4 near &apos;}&apos;</tspan></text></svg>';
+    expect(parseKrokiError('graphviz', body).message).toBe("Error: <stdin>: syntax error in line 4 near '}'");
   });
 
   it('omits the line when there is none', () => {

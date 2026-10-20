@@ -33,7 +33,9 @@ export class KrokiRenderer implements Renderer {
     try {
       res = await fetch(`${this.baseUrl}/${format}/${output}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'text/plain; charset=utf-8', Accept: contentType(output) },
+        // Not image/*: Kroki then draws 400 errors as an SVG or PNG image instead
+        // of plain text. The URL path already picks the output format.
+        headers: { 'Content-Type': 'text/plain; charset=utf-8', Accept: '*/*' },
         body: source,
         signal: AbortSignal.timeout(this.timeoutMs),
       });
@@ -49,7 +51,8 @@ export class KrokiRenderer implements Renderer {
 
     if (res.ok) return Buffer.from(await res.arrayBuffer());
 
-    const body = await res.text().catch(() => '');
+    // Some Kroki servers still answer with an error image; never read PNG bytes as text.
+    const body = res.headers.get('content-type')?.startsWith('image/png') ? '' : await res.text().catch(() => '');
     if (res.status === 400) {
       throw new DiagramSyntaxError([parseKrokiError(format, body)]);
     }
@@ -63,8 +66,4 @@ export class KrokiRenderer implements Renderer {
   shareUrl(format: string, source: string): string {
     return `${this.baseUrl}/${format}/svg/${encodeKrokiSource(source)}`;
   }
-}
-
-function contentType(output: OutputFormat): string {
-  return output === 'png' ? 'image/png' : 'image/svg+xml';
 }
