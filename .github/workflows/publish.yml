@@ -31,10 +31,11 @@ jobs:
       - uses: pnpm/action-setup@v4
 
       # Node 24 ships npm 11, which trusted publishing requires (>= 11.5.1).
+      # No pnpm cache: when the version is already published, install is
+      # skipped and the cache post-step fails on the missing store path.
       - uses: actions/setup-node@v5
         with:
           node-version: 24
-          cache: pnpm
           registry-url: https://registry.npmjs.org
 
       - name: Check whether this version is already published
