@@ -18,7 +18,7 @@ const LINE_PATTERNS = [/\(line:\s*(\d+)\)/i, /-:(\d+):\d+:/, /\bline\s+(\d+)/i];
  * extracts a 1-based line number when the message carries one.
  */
 export function parseKrokiError(format: string, body: string): DiagramError {
-  const lines = body
+  const lines = svgErrorText(body)
     .replace(/^\s*Error \d{3}:\s*/, '')
     .split(/\r?\n/)
     .map((l) => l.trimEnd())
@@ -38,4 +38,19 @@ export function parseKrokiError(format: string, body: string): DiagramError {
     }
   }
   return { message };
+}
+
+/** Kroki draws the error as an SVG when the request accepts images: recover its text lines. */
+function svgErrorText(body: string): string {
+  if (!/^\s*(<\?xml[^>]*>\s*)?<svg[\s>]/.test(body)) return body;
+  return [...body.matchAll(/<tspan[^>]*>([\s\S]*?)<\/tspan>/g)].map((m) => decodeXml(m[1] ?? '')).join('\n');
+}
+
+function decodeXml(text: string): string {
+  return text
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;|&#39;/g, "'")
+    .replace(/&amp;/g, '&');
 }

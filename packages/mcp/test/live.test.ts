@@ -26,6 +26,21 @@ describe.skipIf(!process.env.KROKI_LIVE)('live Kroki', () => {
     expect(result.structuredContent).toMatchObject({ valid: false, errors: [{ line: 4 }] });
   });
 
+  // Kroki draws errors as images when asked for images; the tools must still get text.
+  it.each([
+    ['render_diagram', 'svg', 'd2', 'a -> b\nc: {', 'maps must be terminated'],
+    ['render_diagram', 'png', 'graphviz', 'digraph {', 'syntax error'],
+    ['validate_diagram', undefined, 'd2', 'a -> b\nc: {', 'maps must be terminated'],
+  ])('returns plain-text errors from %s (%s)', async (name, output, format, source, expected) => {
+    const result = await harness.client.callTool({
+      name,
+      arguments: { format, source, ...(output ? { output } : {}) },
+    });
+    const body = JSON.stringify(result);
+    expect(body).toContain(expected);
+    expect(body).not.toMatch(/<svg|PNG/);
+  });
+
   it('renders PNG', async () => {
     const result = await harness.client.callTool({
       name: 'render_diagram',
