@@ -1,0 +1,32 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.himanshu-mamgain/archform",
+  "title": "Archform",
+  "description": "Render and validate diagrams as code: Mermaid, PlantUML, C4, Graphviz, D2 and more.",
+  "repository": {
+    "url": "https://github.com/himanshu-mamgain/archform",
+    "source": "github",
+    "subfolder": "packages/mcp"
+  },
+  "version": "0.1.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "registryBaseUrl": "https://registry.npmjs.org",
+      "identifier": "@archform/mcp",
+      "version": "0.1.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "KROKI_URL",
+          "description": "Kroki server used for rendering. Defaults to the public https://kroki.io; set it to a self-hosted instance to keep diagram source private.",
+          "isRequired": false,
+          "isSecret": false,
+          "format": "string"
+        }
+      ]
+    }
+  ]
+}
