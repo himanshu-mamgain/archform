@@ -56,17 +56,22 @@ jobs:
           fi
 
           ENCODED=$(node -p "encodeURIComponent(process.argv[1])" "$MCP_NAME")
-          STATUS=$(curl -s -o /dev/null -w '%{http_code}' \
-            "https://registry.modelcontextprotocol.io/v0/servers/$ENCODED/versions/$VERSION")
-          if [ "$STATUS" = "200" ]; then
-            echo "$MCP_NAME $VERSION is already in the MCP Registry."
-            echo "registry=false" >> "$GITHUB_OUTPUT"
-          elif [ "$STATUS" = "404" ]; then
-            echo "registry=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "::error::MCP Registry lookup returned HTTP $STATUS; try again later."
-            exit 1
-          fi
+          URL="https://registry.modelcontextprotocol.io/v0/servers/$ENCODED/versions/$VERSION"
+          for attempt in 1 2 3 4 5; do
+            STATUS=$(curl -sL -o registry-lookup.json -w '%{http_code}' "$URL" || echo "curl-failed")
+            if [ "$STATUS" = "200" ]; then
+              echo "$MCP_NAME $VERSION is already in the MCP Registry."
+              echo "registry=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            elif [ "$STATUS" = "404" ]; then
+              echo "registry=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "MCP Registry lookup returned $STATUS (attempt $attempt/5): $(head -c 300 registry-lookup.json 2>/dev/null)"
+            sleep 15
+          done
+          echo "::error::MCP Registry lookup kept failing for $URL; try again later."
+          exit 1
 
       - if: steps.version.outputs.npm == 'true'
         run: pnpm install --frozen-lockfile

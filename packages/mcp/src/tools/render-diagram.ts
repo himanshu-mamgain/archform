@@ -5,7 +5,7 @@ import { resolveFormat } from '../formats.js';
 import { DiagramSyntaxError, type Renderer, RenderServiceError } from '../renderers/renderer.js';
 import { formatSchema, READ_ONLY_ANNOTATIONS, sourceSchema, toolError } from './shared.js';
 
-export function registerRenderDiagram(server: McpServer, renderer: Renderer): void {
+export function registerRenderDiagram(server: McpServer, renderer: Renderer, unavailable?: string): void {
   server.registerTool(
     'render_diagram',
     {
@@ -26,6 +26,7 @@ export function registerRenderDiagram(server: McpServer, renderer: Renderer): vo
       annotations: READ_ONLY_ANNOTATIONS,
     },
     async ({ format: name, source, output }): Promise<CallToolResult> => {
+      if (unavailable) return toolError(unavailable);
       const format = resolveFormat(name);
       if (!format) return toolError(`Unknown format "${name}". Call list_formats to see the supported formats.`);
       if (!format.outputs.includes(output)) {

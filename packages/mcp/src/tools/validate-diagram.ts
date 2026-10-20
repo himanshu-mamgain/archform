@@ -9,7 +9,7 @@ const outputSchema = z.object({
   errors: z.array(z.object({ line: z.number().int().optional(), message: z.string() })),
 });
 
-export function registerValidateDiagram(server: McpServer, renderer: Renderer): void {
+export function registerValidateDiagram(server: McpServer, renderer: Renderer, unavailable?: string): void {
   server.registerTool(
     'validate_diagram',
     {
@@ -24,6 +24,7 @@ export function registerValidateDiagram(server: McpServer, renderer: Renderer): 
       annotations: READ_ONLY_ANNOTATIONS,
     },
     async ({ format: name, source }): Promise<CallToolResult> => {
+      if (unavailable) return toolError(unavailable);
       const format = resolveFormat(name);
       if (!format) return toolError(`Unknown format "${name}". Call list_formats to see the supported formats.`);
 

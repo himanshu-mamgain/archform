@@ -86,7 +86,7 @@ npx -y @archform/mcp --http --port 3000
 By default the server binds to `127.0.0.1` and rejects requests whose `Host` or `Origin` is not localhost (DNS rebinding protection). To expose it publicly, for example for ChatGPT developer mode, bind to all interfaces and name your public hostname:
 
 ```sh
-HOST=0.0.0.0 ALLOWED_HOSTS=mcp.example.com TRUST_PROXY=1 PORT=8080 npx -y @archform/mcp --http
+HOST=0.0.0.0 ALLOWED_HOSTS=mcp.example.com TRUST_PROXY=1 RATE_LIMIT_PER_CLIENT=0 PORT=8080 npx -y @archform/mcp --http
 ```
 
 Then add `https://mcp.example.com/mcp` as a connector in ChatGPT (Settings → Connectors, developer mode) with no authentication. Serve it behind HTTPS.
@@ -96,8 +96,10 @@ Then add `https://mcp.example.com/mcp` as a connector in ChatGPT (Settings → C
 The HTTP endpoint limits request bodies to 512 KB and counts **tool calls**, not HTTP requests. A session's `initialize` and `tools/list` requests are not counted.
 
 - **Overall:** `RATE_LIMIT` (default 120 per minute) caps tool calls from all clients combined. Size it to what your Kroki backend can handle. The default is polite to the public kroki.io; raise it for a self-hosted Kroki.
-- **Per client:** `RATE_LIMIT_PER_CLIENT` (default 60 per minute) stops one client from using the whole budget. ChatGPT calls your server from OpenAI's servers, so **all ChatGPT users share a handful of IPs**, and this limit applies to them together.
+- **Per client:** `RATE_LIMIT_PER_CLIENT` (default 60 per minute) stops one client from using the whole budget. ChatGPT calls your server from OpenAI's servers, so **all ChatGPT users share a handful of IPs**, and this limit applies to them together. On a deployment that mainly serves ChatGPT, set `RATE_LIMIT_PER_CLIENT=0` (as in the example above) or make it equal to `RATE_LIMIT`, so ChatGPT users can use the whole overall budget.
 - **Behind a proxy:** most hosts (Render, Fly.io, Railway, Cloud Run) put a proxy in front of your app, so every request seems to come from the proxy's address. Set `TRUST_PROXY=1` (the number of proxies in front of the server) so the limiter uses the address your proxy added to `X-Forwarded-For`. Leave it unset when clients connect directly. Clients can write anything into that header, so it is ignored unless `TRUST_PROXY` is set.
+
+When a single tool call is over a limit, the model gets a normal tool result with `isError: true` and a message like "Rate limit reached: … Retry in 42s.", so it can tell the user to wait. An HTTP 429 would show up only as a generic connector failure. Batched or malformed requests over the limit get `429` with `Retry-After`.
 
 The counters are in memory, so each instance enforces its own limits.
 
